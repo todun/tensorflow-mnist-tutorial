@@ -32,6 +32,9 @@ Windows:
 		conda config --add channels conda-forge
 		conda install tensorflow
 
+Google Colaboratory:
+    https://colab.research.google.com
+
 TEST YOUR INSTALLATION:
     git clone https://github.com/martin-gorner/tensorflow-mnist-tutorial.git
     cd tensorflow-mnist-tutorial
