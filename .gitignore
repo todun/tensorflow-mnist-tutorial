@@ -2,6 +2,7 @@
 
 #tensorflow project
 data/
+checkpoints/
 
 #####=== Python ===#####
 

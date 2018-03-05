@@ -10,14 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
+import math
+
 import tensorflow as tf
+from tensorflow.examples.tutorials.mnist import input_data as mnist_data
 from tensorflow.python.estimator import run_config as run_config_lib
 from tensorflow.python.platform import tf_logging as logging
-from tensorflow.examples.tutorials.mnist import input_data as mnist_data
 
-import math
 from mlengine.digits import test_digits
+
 print("Tensorflow version " + tf.__version__)
 logging.set_verbosity(logging.INFO)
 
@@ -27,43 +28,55 @@ logging.set_verbosity(logging.INFO)
 # using the Estimator interface instead.
 
 # Download images and labels into mnist.test (10K images+labels) and mnist.train (60K images+labels)
-mnist = mnist_data.read_data_sets("data", one_hot=False, reshape=True, validation_size=0)
+mnist = mnist_data.read_data_sets(train_dir="data", one_hot=False, reshape=True, validation_size=0)
+
 
 # In memory training data for this simple case.
 # When data is too large to fit in memory, use Tensorflow queues.
 def train_data_input_fn():
-    return tf.train.shuffle_batch([tf.constant(mnist.train.images), tf.constant(mnist.train.labels)],
-                                  batch_size=100, capacity=1100, min_after_dequeue=1000, enqueue_many=True)
+    return tf.train.shuffle_batch(
+        tensors=[tf.constant(value=mnist.train.images), tf.constant(value=mnist.train.labels)],
+        batch_size=100, capacity=1100, min_after_dequeue=1000, enqueue_many=True)
+
 
 # Eval data is an in-memory constant here.
 def eval_data_input_fn():
-    return tf.constant(mnist.test.images), tf.constant(mnist.test.labels)
+    return tf.constant(value=mnist.test.images), tf.constant(value=mnist.test.labels)
 
 
 # Test data for a predictions run
 def predict_input_fn():
-    return tf.constant(test_digits)
+    return tf.constant(value=test_digits)
 
 
 # Model loss (not needed in INFER mode)
 def conv_model_loss(Ylogits, Y_, mode):
-    return tf.reduce_mean(tf.losses.softmax_cross_entropy(tf.one_hot(Y_,10), Ylogits)) * 100 \
-        if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL else None
+    reduced_tensor = tf.reduce_mean(
+        input_tensor=tf.losses.softmax_cross_entropy(onehot_labels=tf.one_hot(indices=Y_, depth=10),
+                                                     logits=Ylogits)) * 100
+    return reduced_tensor if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL else None
 
 
 # Model optimiser (only needed in TRAIN mode)
 def conv_model_train_op(loss, mode):
     # Compatibility warning: optimize_loss is still in contrib. This will change in Tensorflow 1.2
-    return tf.contrib.layers.optimize_loss(loss, tf.train.get_global_step(), learning_rate=0.003, optimizer="Adam",
-        # to remove learning rate decay, comment the next line
-        learning_rate_decay_fn=lambda lr, step: 0.0001 + tf.train.exponential_decay(lr, step, -2000, math.e)
-        ) if mode == tf.estimator.ModeKeys.TRAIN else None
+    return tf.contrib.layers.optimize_loss(loss,
+                                           tf.train.get_global_step(),
+                                           learning_rate=0.003, optimizer="Adam",
+                                           # to remove learning rate decay, comment the next line
+                                           learning_rate_decay_fn=lambda lr,
+                                                                         step: 0.0001 + tf.train.exponential_decay(
+                                               learning_rate=lr,
+                                               global_step=step,
+                                               decay_steps=-2000,
+                                               decay_rate=math.e)
+                                           ) if mode == tf.estimator.ModeKeys.TRAIN else None
 
 
 # Model evaluation metric (not needed in INFER mode)
 def conv_model_eval_metrics(classes, Y_, mode):
     # You can name the fields of your metrics dictionary as you like.
-    return {'accuracy': tf.metrics.accuracy(classes, Y_)} \
+    return {'accuracy': tf.metrics.accuracy(labels=classes, predictions=Y_)} \
         if mode == tf.estimator.ModeKeys.TRAIN or mode == tf.estimator.ModeKeys.EVAL else None
 
 
@@ -72,25 +85,28 @@ def conv_model(features, labels, mode):
     X = features
     Y_ = labels
     XX = tf.reshape(X, [-1, 28, 28, 1])
-    biasInit = tf.constant_initializer(0.1, dtype=tf.float32)
-    Y1 = tf.layers.conv2d(XX,  filters=6,  kernel_size=[6, 6], padding="same", activation=tf.nn.relu, bias_initializer=biasInit)
-    Y2 = tf.layers.conv2d(Y1, filters=12, kernel_size=[5, 5], padding="same", strides=2, activation=tf.nn.relu, bias_initializer=biasInit)
-    Y3 = tf.layers.conv2d(Y2, filters=24, kernel_size=[4, 4], padding="same", strides=2, activation=tf.nn.relu, bias_initializer=biasInit)
-    Y4 = tf.reshape(Y3, [-1, 24*7*7])
-    Y5 = tf.layers.dense(Y4, 200, activation=tf.nn.relu, bias_initializer=biasInit)
+    biasInit = tf.constant_initializer(value=0.1, dtype=tf.float32)
+    Y1 = tf.layers.conv2d(inputs=XX, filters=6, kernel_size=[6, 6], padding="same", activation=tf.nn.relu,
+                          bias_initializer=biasInit)
+    Y2 = tf.layers.conv2d(inputs=Y1, filters=12, kernel_size=[5, 5], padding="same", strides=2, activation=tf.nn.relu,
+                          bias_initializer=biasInit)
+    Y3 = tf.layers.conv2d(inputs=Y2, filters=24, kernel_size=[4, 4], padding="same", strides=2, activation=tf.nn.relu,
+                          bias_initializer=biasInit)
+    Y4 = tf.reshape(tensor=Y3, shape=[-1, 24 * 7 * 7])
+    Y5 = tf.layers.dense(inputs=Y4, units=200, activation=tf.nn.relu, bias_initializer=biasInit)
     # to deactivate dropout on the dense layer, set rate=1. The rate is the % of dropped neurons.
-    Y5d = tf.layers.dropout(Y5, rate=0.25, training=mode==tf.estimator.ModeKeys.TRAIN)
-    Ylogits = tf.layers.dense(Y5d, 10)
-    predict = tf.nn.softmax(Ylogits)
-    classes = tf.cast(tf.argmax(predict, 1), tf.uint8)
+    Y5d = tf.layers.dropout(inputs=Y5, rate=0.25, training=mode == tf.estimator.ModeKeys.TRAIN)
+    Ylogits = tf.layers.dense(inputs=Y5d, units=10)
+    predict = tf.nn.softmax(logits=Ylogits)
+    classes = tf.cast(x=tf.argmax(input=predict, axis=1), dtype=tf.uint8)
 
-    loss = conv_model_loss(Ylogits, Y_, mode)
-    train_op = conv_model_train_op(loss, mode)
-    eval_metrics = conv_model_eval_metrics(classes, Y_, mode)
+    loss = conv_model_loss(Ylogits=Ylogits, Y_=Y_, mode=mode)
+    train_op = conv_model_train_op(loss=loss, mode=mode)
+    eval_metrics = conv_model_eval_metrics(classes=classes, Y_=Y_, mode=mode)
 
     return tf.estimator.EstimatorSpec(
         mode=mode,
-        predictions={"predictions": predict, "classes": classes}, # name these fields as you like
+        predictions={"predictions": predict, "classes": classes},  # name these fields as you like
         loss=loss,
         train_op=train_op,
         eval_metric_ops=eval_metrics
@@ -105,10 +121,13 @@ def conv_model(features, labels, mode):
 class CustomRunConfig(run_config_lib.RunConfig):
     @property
     def save_checkpoints_secs(self): return None
+
     @property
     def save_checkpoints_steps(self): return 1000
+
     @property
     def tf_random_seed(self): return 0
+
 
 estimator = tf.estimator.Estimator(model_fn=conv_model, model_dir="checkpoints", config=CustomRunConfig())
 
@@ -121,5 +140,5 @@ for i, digit in enumerate(digits):
     print(str(digit['classes']), str(digit['predictions']))
     # Compatibility Warning: the break is necessary for the time being because predict will keep asking for
     # data from predict_input_fn indefinitely. This behaviour will probably change in the future.
-    if i >= 4: break
-
+    if i >= 4:
+        break
