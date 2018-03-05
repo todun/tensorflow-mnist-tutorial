@@ -83,10 +83,14 @@ correct_prediction = tf.equal(x=tf.argmax(input=Y, axis=1), y=tf.argmax(input=Y_
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
 # matplotlib visualisation
-allweights = tf.concat(values=[tf.reshape(W1, [-1]), tf.reshape(W2, [-1]), tf.reshape(W3, [-1]), tf.reshape(W4, [-1]),
-                               tf.reshape(W5, [-1])], axis=0)
-allbiases = tf.concat(values=[tf.reshape(B1, [-1]), tf.reshape(B2, [-1]), tf.reshape(B3, [-1]), tf.reshape(B4, [-1]),
-                              tf.reshape(B5, [-1])], axis=0)
+allweights = tf.concat(
+    values=[tf.reshape(tensor=W1, shape=[-1]), tf.reshape(tensor=W2, shape=[-1]), tf.reshape(tensor=W3, shape=[-1]),
+            tf.reshape(tensor=W4, shape=[-1]),
+            tf.reshape(tensor=W5, shape=[-1])], axis=0)
+allbiases = tf.concat(
+    values=[tf.reshape(tensor=B1, shape=[-1]), tf.reshape(tensor=B2, shape=[-1]), tf.reshape(tensor=B3, shape=[-1]),
+            tf.reshape(tensor=B4, shape=[-1]),
+            tf.reshape(tensor=B5, shape=[-1])], axis=0)
 I = tensorflowvisu.tf_format_mnist_images(X=X, Y=Y, Y_=Y_)
 It = tensorflowvisu.tf_format_mnist_images(X=X, Y=Y, Y_=Y_, n=1000, lines=25)
 datavis = tensorflowvisu.MnistDataVis()
